@@ -1,6 +1,6 @@
 use crate::error::ContractError;
 use crate::helpers::map_validate;
-use crate::msg::{ExecuteMsg, InstantiateMsg};
+use crate::msg::{ActionType, ExecuteMsg, InstantiateMsg};
 use crate::state::{
     ask_key, asks, bid_key, bids, collection_bid_key, collection_bids, Ask, Bid, BidId,
     CollectionBid, CollectionBidId, SaleType, SudoParams, TokenId, BID_ID_TO_BID_KEY,
@@ -15,9 +15,9 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw2981_royalties::msg::RoyaltiesInfoResponse;
 use cw2981_royalties::{check_royalties, query_royalties_info};
-use cw721::{Cw721ExecuteMsg, OwnerOfResponse, ApprovalResponse};
-use cw721_base::QueryMsg;
+use cw721::{ApprovalResponse, Cw721ExecuteMsg, OwnerOfResponse};
 use cw721_base::helpers::Cw721Contract;
+use cw721_base::QueryMsg;
 use cw_utils::{maybe_addr, must_pay, nonpayable};
 // use schemars::_serde_json::de;
 use semver::Version;
@@ -338,7 +338,12 @@ pub fn execute_set_ask(
 
     // Check if this contract is approved to transfer the token
 
-    let approval = check_approval(deps.as_ref(), &collection, token_id.clone(), env.contract.address.to_string().clone());
+    let approval = check_approval(
+        deps.as_ref(),
+        &collection,
+        token_id.clone(),
+        env.contract.address.to_string().clone(),
+    );
 
     // let query_result = Cw721Contract::<Empty, Empty>(collection.clone(), PhantomData, PhantomData)
     //     .approval(
@@ -355,7 +360,7 @@ pub fn execute_set_ask(
     if !approval.unwrap() {
         return Err(ContractError::NotQueryContract {});
     }
-    
+
     // let query_result = Cw721Contract::<Empty, Empty>(collection.clone(), PhantomData, PhantomData).approval(
     //     &deps.querier,
     //     token_id.clone(),
@@ -602,7 +607,7 @@ pub fn execute_set_bid(
                     Ordering::Less => {
                         params.current_bid_id = _current_bid_id;
                         let _ = SUDO_PARAMS.save(deps.storage, &params);
-                        let _data = (bidder.clone().to_string(),bid_key.clone());
+                        let _data = (bidder.clone().to_string(), bid_key.clone());
                         let _ = BID_ID_TO_BID_KEY.save(deps.storage, _current_bid_id, &_data);
                         save_bid(deps.storage)?
                     }
@@ -631,6 +636,7 @@ pub fn execute_set_bid(
                             bidder.clone(),
                             finder,
                             &mut res,
+                            ActionType::BuyNow
                         )?;
                         None
                     }
@@ -661,9 +667,7 @@ pub fn execute_set_bid(
     //     vec![]
     // };
     _current_bid_id = match _bid {
-        Some(bid) => {
-            bid.bid_id
-        },
+        Some(bid) => bid.bid_id,
         None => 0,
     };
 
@@ -776,6 +780,7 @@ pub fn execute_accept_bid(
         bidder.clone(),
         finder,
         &mut res,
+        ActionType::AcceptOffer
     )?;
 
     let event = Event::new("accept-bid")
@@ -1005,6 +1010,7 @@ pub fn execute_accept_collection_bid(
         bidder.clone(),
         finder,
         &mut res,
+        ActionType::AcceptCollectionOffer
     )?;
 
     let event = Event::new("accept-collection-bid")
@@ -1239,6 +1245,7 @@ fn finalize_sale(
     buyer: Addr,
     finder: Option<Addr>,
     res: &mut Response,
+    action_type: ActionType,
 ) -> StdResult<()> {
     payout(
         deps,
@@ -1268,13 +1275,15 @@ fn finalize_sale(
     // res.messages
     //     .append(&mut prepare_sale_hook(deps, &ask, buyer.clone())?);
 
-    let event = Event::new("finalize-sale")
-        .add_attribute("collection", ask.collection.to_string())
-        .add_attribute("token_id", ask.token_id.to_string())
-        .add_attribute("seller", ask.seller.to_string())
-        .add_attribute("buyer", buyer.to_string())
-        .add_attribute("price", price.to_string());
-    res.events.push(event);
+    if action_type == ActionType::BuyNow {
+        let event = Event::new("finalize-sale")
+            .add_attribute("collection", ask.collection.to_string())
+            .add_attribute("token_id", ask.token_id.to_string())
+            .add_attribute("seller", ask.seller.to_string())
+            .add_attribute("buyer", buyer.to_string())
+            .add_attribute("price", price.to_string());
+        res.events.push(event);
+    }
 
     Ok(())
 }
@@ -1419,16 +1428,21 @@ fn only_owner(
     Ok(res)
 }
 
-
 /// Checks that the collection is tradable
-fn check_approval(deps: Deps, collection: &Addr, token_id: String, contract_address:String) -> Result<bool, ContractError> {
-    let res: Result<ApprovalResponse, StdError> = deps
-        .querier
-        .query_wasm_smart(collection.clone(), &QueryMsg::<ApprovalResponse>::Approval { 
-            token_id, 
-            spender: contract_address, 
-            include_expired: None
-        });
+fn check_approval(
+    deps: Deps,
+    collection: &Addr,
+    token_id: String,
+    contract_address: String,
+) -> Result<bool, ContractError> {
+    let res: Result<ApprovalResponse, StdError> = deps.querier.query_wasm_smart(
+        collection.clone(),
+        &QueryMsg::<ApprovalResponse>::Approval {
+            token_id,
+            spender: contract_address,
+            include_expired: None,
+        },
+    );
 
     match res {
         Ok(_collection_info) => Ok(true),

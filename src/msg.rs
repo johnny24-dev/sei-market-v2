@@ -138,6 +138,13 @@ pub enum ExecuteMsg {
 }
 
 #[cw_serde]
+pub enum ActionType {
+    AcceptCollectionOffer,
+    AcceptOffer,
+    BuyNow
+}
+
+#[cw_serde]
 pub enum SudoMsg {
     /// Update the contract parameters
     /// Can only be called by governance
@@ -387,14 +394,6 @@ pub enum QueryMsg {
         limit: Option<u32>,
     },
     /// Show all registered ask hooks
-    #[returns(HooksResponse)]
-    AskHooks {},
-    /// Show all registered bid hooks
-    #[returns(HooksResponse)]
-    BidHooks {},
-    /// Show all registered sale hooks
-    #[returns(HooksResponse)]
-    SaleHooks {},
     /// Get the config for the contract
     #[returns(ParamsResponse)]
     Params {},
