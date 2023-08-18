@@ -1,0 +1,59 @@
+[package]
+name = "bluemove_market"
+version = "0.1.0"
+authors = ["namng"]
+edition = "2021"
+
+exclude = [
+  # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
+  "contract.wasm",
+  "hash.txt",
+]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+rpath            = false
+lto              = true
+overflow-checks  = true
+opt-level        = 3
+debug            = false
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
+
+[features]
+# for more explicit tests, cargo test --features=backtraces
+backtraces = ["cosmwasm-std/backtraces"]
+# use library feature to disable all instantiate/execute/query exports
+library = []
+
+[package.metadata.scripts]
+optimize = """docker run --rm -v "$(pwd)":/code \
+  --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
+  --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+  cosmwasm/rust-optimizer:0.12.10
+"""
+
+[dependencies]
+cosmwasm-schema = "1.2.6"
+cosmwasm-std = "1.2.6"
+cosmwasm-storage = "1.2.6"
+cw-storage-plus = "1.1.0"
+cw2 = "1.0.1"
+cw20 = "1.0.1"
+cw721 = "0.17.0"
+cw721-base = { version = "0.17.0", features = ["library"] }
+cw2981-royalties = { version = "0.17.0", features = ["library"] }
+schemars = "0.8.12"
+serde = { version = "1.0.164", default-features = false, features = ["derive"] }
+cw-utils = "1.0.1"
+thiserror = "1.0.40"
+semver = "1.0.17"
+
+[dev-dependencies]
+cw-multi-test = "0.16.2"
