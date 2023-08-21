@@ -1421,7 +1421,7 @@ fn payout(
                 }
             };
         
-            let royalty_fee = payment * Uint128::from(royalty_info.fee_bps / 10000);
+            let royalty_fee = payment * Uint128::from(royalty_info.fee_bps) / Uint128::from(10000u128);
 
             if payment < (market_fee + Uint128::from(finders_fee) + royalty_fee) {
                 return Err(StdError::generic_err("Fees exceed payment"));
