@@ -122,6 +122,18 @@ pub enum ExecuteMsg {
         collection: String,
         token_id: TokenId,
     },
+    AddCreatorFee {
+        collection:String,
+        fee_bps:u64,
+        creator:String
+    },
+
+    UpdateCreatorFee {
+        collection:String,
+        fee_bps:u64,
+        creator:String
+    },
+
     // Privileged operation to remove stale or invalid asks.
     // RemoveStaleAsk {
     //     collection: String,

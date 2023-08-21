@@ -98,4 +98,10 @@ pub enum ContractError {
 
     #[error("can't query contract")]
     NotQueryContract {},
+
+    #[error("Already Config")]
+    AlreadyConfigCreatorFee {},
+
+    #[error("Invalid Admin")]
+    InvalidAdmin {},
 }

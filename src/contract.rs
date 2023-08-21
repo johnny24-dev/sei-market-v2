@@ -3,8 +3,8 @@ use crate::helpers::map_validate;
 use crate::msg::{ActionType, ExecuteMsg, InstantiateMsg};
 use crate::state::{
     ask_key, asks, bid_key, bids, collection_bid_key, collection_bids, Ask, Bid, BidId,
-    CollectionBid, CollectionBidId, SaleType, SudoParams, TokenId, BID_ID_TO_BID_KEY,
-    COLLECTION_BID_ID_TO_COLLECTION_BID_KEY, SUDO_PARAMS,
+    CollectionBid, CollectionBidId, RoyaltiesInfo, SaleType, SudoParams, TokenId,
+    BID_ID_TO_BID_KEY, COLLECTION_BID_ID_TO_COLLECTION_BID_KEY, ROYALTIES_INFO, SUDO_PARAMS,
 };
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
@@ -122,7 +122,6 @@ pub fn execute(
             funds_recipient,
             reserve_for,
             finders_fee_bps,
-            // expires,
         } => execute_set_ask(
             deps,
             env,
@@ -135,7 +134,6 @@ pub fn execute(
                 funds_recipient: maybe_addr(api, funds_recipient)?,
                 reserve_for: maybe_addr(api, reserve_for)?,
                 finders_fee_bps,
-                // expires,
             },
         ),
         ExecuteMsg::RemoveAsk {
@@ -145,7 +143,6 @@ pub fn execute(
         ExecuteMsg::SetBid {
             collection,
             token_id,
-            // expires,
             finder,
             finders_fee_bps,
             sale_type,
@@ -157,7 +154,6 @@ pub fn execute(
             BidInfo {
                 collection: api.addr_validate(&collection)?,
                 token_id,
-                // expires,
                 finder: maybe_addr(api, finder)?,
                 finders_fee_bps,
             },
@@ -166,7 +162,6 @@ pub fn execute(
         ExecuteMsg::BuyNow {
             collection,
             token_id,
-            // expires,
             finder,
             finders_fee_bps,
         } => execute_set_bid(
@@ -177,7 +172,6 @@ pub fn execute(
             BidInfo {
                 collection: api.addr_validate(&collection)?,
                 token_id,
-                // expires,
                 finder: maybe_addr(api, finder)?,
                 finders_fee_bps,
             },
@@ -239,7 +233,6 @@ pub fn execute(
             collection,
             price_per_item,
             quantity,
-            // expires,
             finders_fee_bps,
         } => execute_set_collection_bid(
             deps,
@@ -249,7 +242,6 @@ pub fn execute(
             price_per_item,
             quantity,
             finders_fee_bps,
-            // expires,
         ),
         ExecuteMsg::RemoveCollectionBid {
             collection,
@@ -281,34 +273,82 @@ pub fn execute(
             collection,
             token_id,
         } => execute_sync_ask(deps, env, info, api.addr_validate(&collection)?, token_id),
-        // ExecuteMsg::RemoveStaleAsk {
-        //     collection,
-        //     token_id,
-        // } => execute_remove_stale_ask(deps, env, info, api.addr_validate(&collection)?, token_id),
-        // ExecuteMsg::RemoveStaleBid {
-        //     collection,
-        //     token_id,
-        //     bidder,
-        // } => execute_remove_stale_bid(
-        //     deps,
-        //     env,
-        //     info,
-        //     api.addr_validate(&collection)?,
-        //     token_id,
-        //     api.addr_validate(&bidder)?,
-        // ),
-        // ExecuteMsg::RemoveStaleCollectionBid { collection, bidder } => {
-        //     execute_remove_stale_collection_bid(
-        //         deps,
-        //         env,
-        //         info,
-        //         api.addr_validate(&collection)?,
-        //         api.addr_validate(&bidder)?,
-        //     )
-        // }
+        ExecuteMsg::AddCreatorFee {
+            collection,
+            fee_bps,
+            creator,
+        } => add_creator_fee(deps, env, info, collection, fee_bps, creator),
+        ExecuteMsg::UpdateCreatorFee {
+            collection,
+            fee_bps,
+            creator,
+        } => update_creator_fee(deps, env, info, collection, fee_bps, creator),
     }
 }
 
+pub fn add_creator_fee(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    collection: String,
+    fee_bps: u64,
+    creator: String,
+) -> Result<Response, ContractError> {
+    let sender = info.sender;
+    // let admin = Addr::unchecked("sei14pzk3uf9rxqxvq53kvuhuv7mxnwevy6t8gra8r");
+    assert_eq!(sender, "sei14pzk3uf9rxqxvq53kvuhuv7mxnwevy6t8gra8r");
+    let contain = ROYALTIES_INFO.has(deps.storage, collection.clone());
+    if contain {
+        return Err(ContractError::AlreadyConfigCreatorFee {});
+    }
+
+    let _ = ROYALTIES_INFO.save(
+        deps.storage,
+        collection.clone(),
+        &RoyaltiesInfo {
+            fee_bps,
+            creator_address: Addr::unchecked(creator.clone()),
+        },
+    );
+
+    let event = Event::new("creator_config")
+        .add_attribute("collection", collection)
+        .add_attribute("fee_bps", fee_bps.to_string())
+        .add_attribute("creator", creator);
+
+    Ok(Response::new().add_event(event))
+}
+
+pub fn update_creator_fee(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    collection: String,
+    fee_bps: u64,
+    creator: String,
+) -> Result<Response, ContractError> {
+    let sender = info.sender;
+    // let admin = Addr::unchecked("sei14pzk3uf9rxqxvq53kvuhuv7mxnwevy6t8gra8r");
+    assert_eq!(sender, "sei14pzk3uf9rxqxvq53kvuhuv7mxnwevy6t8gra8r");
+    let contain = ROYALTIES_INFO.has(deps.storage, collection.clone());
+    if !contain {
+        return Err(ContractError::AlreadyConfigCreatorFee {});
+    }
+
+    let mut royalty_info = ROYALTIES_INFO.load(deps.storage, collection.clone())?;
+
+    royalty_info.creator_address = Addr::unchecked(creator.clone());
+    royalty_info.fee_bps = fee_bps;
+
+    let _ = ROYALTIES_INFO.save(deps.storage, collection.clone(), &royalty_info);
+
+    let event = Event::new("update_creator_config")
+        .add_attribute("collection", collection)
+        .add_attribute("fee_bps", fee_bps.to_string())
+        .add_attribute("creator", creator);
+
+    Ok(Response::new().add_event(event))
+}
 /// A seller may set an Ask on their NFT to list it on Marketplace
 pub fn execute_set_ask(
     deps: DepsMut,
@@ -636,7 +676,7 @@ pub fn execute_set_bid(
                             bidder.clone(),
                             finder,
                             &mut res,
-                            ActionType::BuyNow
+                            ActionType::BuyNow,
                         )?;
                         None
                     }
@@ -780,7 +820,7 @@ pub fn execute_accept_bid(
         bidder.clone(),
         finder,
         &mut res,
-        ActionType::AcceptOffer
+        ActionType::AcceptOffer,
     )?;
 
     let event = Event::new("accept-bid")
@@ -1010,7 +1050,7 @@ pub fn execute_accept_collection_bid(
         bidder.clone(),
         finder,
         &mut res,
-        ActionType::AcceptCollectionOffer
+        ActionType::AcceptCollectionOffer,
     )?;
 
     let event = Event::new("accept-collection-bid")
@@ -1370,18 +1410,39 @@ fn payout(
             res.messages.push(SubMsg::new(seller_share_msg));
         }
         None => {
-            if payment < (market_fee + Uint128::from(finders_fee)) {
+            let royalty_info = ROYALTIES_INFO
+                .load(deps.storage, collection.clone().into_string().clone())
+                .unwrap_or(RoyaltiesInfo {
+                    fee_bps: 500,
+                    creator_address: Addr::unchecked("sei1fxan03vucp8mlk2la0z9pwgvfr0um0avptl38h"),
+                });
+
+            let royalty_fee = payment * Uint128::from(royalty_info.fee_bps / 10000);
+
+            if payment < (market_fee + Uint128::from(finders_fee) + royalty_fee) {
                 return Err(StdError::generic_err("Fees exceed payment"));
             }
             // If token doesn't support royalties, pay seller in full
             let seller_share_msg = BankMsg::Send {
                 to_address: payment_recipient.to_string(),
                 amount: vec![coin(
-                    (payment - market_fee).u128() - finders_fee,
+                    (payment - market_fee - royalty_fee).u128() - finders_fee,
                     DENOM.to_string(),
                 )],
             };
+
+            let royalty_share_msg = BankMsg::Send {
+                to_address: royalty_info.creator_address.clone().into_string(),
+                amount: vec![coin((royalty_fee).u128(), DENOM.to_string())],
+            };
             res.messages.push(SubMsg::new(seller_share_msg));
+            res.messages.push(SubMsg::new(royalty_share_msg));
+
+            let event = Event::new("royalty-payout")
+            .add_attribute("collection", collection.to_string())
+            .add_attribute("amount", royalty_fee.to_string())
+            .add_attribute("recipient", royalty_info.creator_address.into_string());
+        res.events.push(event);
         }
     }
 

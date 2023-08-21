@@ -39,11 +39,13 @@ pub const SUDO_PARAMS: Item<SudoParams> = Item::new("sudo-params");
 pub const BID_ID_TO_BID_KEY: Map<u64, (String, BidKey)> = Map::new("bid_id_to_bidkey");
 pub const COLLECTION_BID_ID_TO_COLLECTION_BID_KEY: Map<u64, CollectionBidKey> =
     Map::new("collection_bid_id_to_collection_bidkey");
+pub const ROYALTIES_INFO: Map<String,RoyaltiesInfo> = Map::new("royalties_info");
 
 pub const ASK_HOOKS: Hooks = Hooks::new("ask-hooks");
 pub const BID_HOOKS: Hooks = Hooks::new("bid-hooks");
 pub const SALE_HOOKS: Hooks = Hooks::new("sale-hooks");
 pub const COLLECTION_BID_HOOKS: Hooks = Hooks::new("collection-bid-hooks");
+
 
 pub type TokenId = String;
 pub type BidId = u64;
@@ -55,6 +57,12 @@ pub trait Order {
     fn is_expired(&self, block: &BlockInfo) -> bool {
         self.expires_at() <= block.time
     }
+}
+
+#[cw_serde]
+pub struct RoyaltiesInfo {
+    pub fee_bps:u64,
+    pub creator_address:Addr
 }
 
 #[cw_serde]
