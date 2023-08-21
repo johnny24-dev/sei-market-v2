@@ -134,6 +134,11 @@ pub enum ExecuteMsg {
         creator:String
     },
 
+    UpdateProtocolFee {
+        trading_fee_bps:u64,
+        fund_address:Option<Addr>
+    }
+
     // Privileged operation to remove stale or invalid asks.
     // RemoveStaleAsk {
     //     collection: String,

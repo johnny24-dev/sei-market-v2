@@ -283,6 +283,9 @@ pub fn execute(
             fee_bps,
             creator,
         } => update_creator_fee(deps, env, info, collection, fee_bps, creator),
+
+        ExecuteMsg::UpdateProtocolFee { trading_fee_bps, 
+            fund_address } => update_protocol_fee(deps, env, info, trading_fee_bps, fund_address),
     }
 }
 
@@ -1348,6 +1351,31 @@ fn parse_royalties(
         _ => None,
     }
 }
+
+pub fn update_protocol_fee(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    trading_fee_bps: u64,
+    fund_address: Option<Addr>,
+) -> Result<Response, ContractError> {
+    let sender = info.sender;
+    // let admin = Addr::unchecked("sei14pzk3uf9rxqxvq53kvuhuv7mxnwevy6t8gra8r");
+    assert_eq!(sender, "sei14pzk3uf9rxqxvq53kvuhuv7mxnwevy6t8gra8r");
+    let mut params = SUDO_PARAMS.load(deps.storage)?;
+
+    params.trading_fee_percent = Decimal::percent(trading_fee_bps);
+    if fund_address.is_some() {
+        params.fund_address = fund_address.unwrap();
+    };
+    SUDO_PARAMS.save(deps.storage, &params)?;
+
+    let event = Event::new("update_protocol_fee")
+    .add_attribute("trading_fee_bps", trading_fee_bps.to_string())
+    .add_attribute("fund_address", params.fund_address.to_string());
+    Ok(Response::new().add_event(event))
+}
+
 /// Payout a bid
 fn payout(
     deps: Deps,
@@ -1412,16 +1440,16 @@ fn payout(
         None => {
             let contain = ROYALTIES_INFO.has(deps.storage, collection.clone().into_string());
             let royalty_info = if contain {
-                ROYALTIES_INFO
-                .load(deps.storage, collection.clone().into_string())?
-            }else{
+                ROYALTIES_INFO.load(deps.storage, collection.clone().into_string())?
+            } else {
                 RoyaltiesInfo {
                     fee_bps: 500,
                     creator_address: Addr::unchecked("sei1fxan03vucp8mlk2la0z9pwgvfr0um0avptl38h"),
                 }
             };
-        
-            let royalty_fee = payment * Uint128::from(royalty_info.fee_bps) / Uint128::from(10000u128);
+
+            let royalty_fee =
+                payment * Uint128::from(royalty_info.fee_bps) / Uint128::from(10000u128);
 
             if payment < (market_fee + Uint128::from(finders_fee) + royalty_fee) {
                 return Err(StdError::generic_err("Fees exceed payment"));
@@ -1443,10 +1471,10 @@ fn payout(
             res.messages.push(SubMsg::new(royalty_share_msg));
 
             let event = Event::new("royalty-payout")
-            .add_attribute("collection", collection.to_string())
-            .add_attribute("amount", royalty_fee.to_string())
-            .add_attribute("recipient", royalty_info.creator_address.into_string());
-        res.events.push(event);
+                .add_attribute("collection", collection.to_string())
+                .add_attribute("amount", royalty_fee.to_string())
+                .add_attribute("recipient", royalty_info.creator_address.into_string());
+            res.events.push(event);
         }
     }
 
