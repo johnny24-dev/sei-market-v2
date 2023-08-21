@@ -1410,13 +1410,17 @@ fn payout(
             res.messages.push(SubMsg::new(seller_share_msg));
         }
         None => {
-            let royalty_info = ROYALTIES_INFO
-                .load(deps.storage, collection.clone().into_string().clone())
-                .unwrap_or(RoyaltiesInfo {
+            let contain = ROYALTIES_INFO.has(deps.storage, collection.clone().into_string());
+            let royalty_info = if contain {
+                ROYALTIES_INFO
+                .load(deps.storage, collection.clone().into_string())?
+            }else{
+                RoyaltiesInfo {
                     fee_bps: 500,
                     creator_address: Addr::unchecked("sei1fxan03vucp8mlk2la0z9pwgvfr0um0avptl38h"),
-                });
-
+                }
+            };
+        
             let royalty_fee = payment * Uint128::from(royalty_info.fee_bps / 10000);
 
             if payment < (market_fee + Uint128::from(finders_fee) + royalty_fee) {
